@@ -93,37 +93,6 @@
 #define AUTH_ROT_1_06 0x33
 #endif
 
-/* Serial Number Configuration */
-#ifndef CASE_ID_01
-#define CASE_ID_01 0x12
-#endif
-#ifndef CASE_ID_23
-#define CASE_ID_23 0x34
-#endif
-
-#ifndef ZL_NUM_0
-#define ZL_NUM_0 0x09
-#endif
-#ifndef ZL_NUM_12
-#define ZL_NUM_12 0x99
-#endif
-#ifndef ZL_NUM_34
-#define ZL_NUM_34 0x99
-#endif
-#ifndef ZL_NUM_56
-#define ZL_NUM_56 0x99
-#endif
-#ifndef ZL_NUM_78
-#define ZL_NUM_78 0x99
-#endif
-
-#ifndef DATE_0
-#define DATE_0 0x01
-#endif
-#ifndef DATE_1
-#define DATE_1 0x98
-#endif
-
 .section .text
 
 .global main
@@ -131,7 +100,7 @@ main:
     rjmp reset
     reti
 
-/* 0x04: Bit-banged Handshake Protocol: Start Transmission */
+/* Bit-banged Handshake Protocol: Start Transmission */
 comm_tx_start:
     sbi	_SFR_IO_ADDR(PORTB), 4
 comm_tx_start_wait:
@@ -140,7 +109,7 @@ comm_tx_start_wait:
     ori	flags, 0x20
     ret
 
-/* 0x0E: EEPROM Access Helpers */
+/* EEPROM Access Helpers */
 eeprom_read_next:
     inc	temp
 eeprom_read_at_temp:
@@ -149,7 +118,7 @@ eeprom_read_at_temp:
     sbi	_SFR_IO_ADDR(EECR), 0
     ret
 
-/* 0x18: EEPROM Write and Increment */
+/* EEPROM Write and Increment */
 eeprom_write_wait_and_inc:
     inc	temp
 eeprom_write_at_temp:
@@ -162,7 +131,7 @@ eeprom_wait_loop:
     rjmp eeprom_wait_loop
     ret
 
-/* 0x28: Timing Delay */
+/* Timing Delay */
 comm_delay:
     eor	arg1, arg1
     ldi	res, 0x02
@@ -174,7 +143,7 @@ delay_inner_loop:
     brne delay_inner_loop
     ret
 
-/* 0x38: Crypto Key Application 1 */
+/* Crypto Key Application 1 */
 crypto_apply_key_1:
     ldi	temp, KEY_1_01
     eor	s0, temp
@@ -188,7 +157,7 @@ crypto_apply_key_1:
     eor	s4, temp
     ret
 
-/* 0x4E: Crypto State Update */
+/* Crypto State Update */
 crypto_update_state:
     mov	temp, s0
     rcall crypto_lcg_step_1
@@ -207,7 +176,7 @@ crypto_update_state:
     mov	s4, res
     ret
 
-/* 0x6E: Receive State */
+/* Receive State */
 comm_rx_state:
     rcall comm_rx_byte
     mov	s0, temp
@@ -219,7 +188,7 @@ comm_rx_state:
     mov	s3, temp
     ret
 
-/* 0x80: Receive Byte */
+/* Receive Byte */
 comm_rx_byte:
     ldi	cnt, 0x08
 rx_bit_loop:
@@ -239,7 +208,7 @@ rx_bit_done:
     brne rx_bit_loop
     ret
 
-/* 0x9C: Transmit Byte */
+/* Transmit Byte */
 comm_tx_byte:
     ldi	cnt, 0x08
 tx_bit_loop:
@@ -256,7 +225,7 @@ tx_bit_done:
     brne tx_bit_loop
     ret
 
-/* 0xB2: Wait for ACK */
+/* Wait for ACK */
 comm_wait_ack:
     sbrc	flags, 5
     rjmp wait_for_pb_low
@@ -272,7 +241,7 @@ wait_for_pb_low:
 wait_for_pb_done:
     ret
 
-/* 0xC6: LCG Step 1 */
+/* LCG Step 1 */
 crypto_lcg_step_1:
     eor	res, res
     ldi	arg1, 0x25
@@ -289,7 +258,7 @@ lcg_step_1_no_add:
     add	res, arg1
     ret
 
-/* 0xDE: LCG Step 2 */
+/* LCG Step 2 */
 crypto_lcg_step_2:
     eor	res, res
     ldi	arg1, 0xAD
@@ -306,7 +275,7 @@ lcg_step_2_no_add:
     add	res, arg1
     ret
 
-/* 0xF6: Crypto Apply Key 2 */
+/* Crypto Apply Key 2 */
 crypto_apply_key_2:
     ldi	temp, KEY_2_01
     eor	s0, temp
@@ -320,7 +289,7 @@ crypto_apply_key_2:
     eor	s4, temp
     ret
 
-/* 0x10C: Transmit State */
+/* Transmit State */
 comm_tx_state:
     mov	temp, s0
     rcall comm_tx_byte
@@ -334,7 +303,7 @@ comm_tx_state:
     rcall comm_tx_byte
     ret
 
-/* 0x122: System Reset and Initialization */
+/* System Reset and Initialization */
 reset:
     ldi	temp, 0xFF
     out	_SFR_IO_ADDR(SPL), temp
@@ -362,7 +331,7 @@ reset:
     ldi	temp, 0x08
     sts	0x60, temp
 
-/* 0x15E: Main Idle Loop */
+/* Main Idle Loop */
 idle_wait:
     eor	temp, temp
     ldi	arg1, 0x01
@@ -385,9 +354,9 @@ entropy_loop:
     cpi	temp, 0x34
     breq cmd_update_sn
     cpi	temp, 0x35
-    breq cmd_write_nvram
+    breq cmd_write_eeprom
     cpi	temp, 0x36
-    breq cmd_read_nvram
+    breq cmd_read_eeprom
     cbi	_SFR_IO_ADDR(PORTB), 4
     rjmp idle_wait
 
@@ -398,31 +367,31 @@ jump_auth2:
 jump_auth_write:
     rjmp cmd_auth_write
 
-/* NVRAM Write Command */
-cmd_write_nvram:
+/* EEPROM Write Command */
+cmd_write_eeprom:
     rcall comm_rx_byte
     cpi	temp, 0x20
-    brmi cmd_nvram_exit
+    brmi cmd_eeprom_exit
     cpi	temp, 0x40
-    brcc cmd_nvram_exit
+    brcc cmd_eeprom_exit
     out	0x22, zero
     out	0x21, temp
     rcall comm_rx_byte
     out	_SFR_IO_ADDR(EEDR), temp
     sbi	_SFR_IO_ADDR(EECR), 2 /* EEPE */
     sbi	_SFR_IO_ADDR(EECR), 1 /* EEMPE */
-cmd_nvram_exit:
+cmd_eeprom_exit:
     rcall comm_delay
     cbi	_SFR_IO_ADDR(PORTB), 4
     rjmp idle_wait
 
-/* NVRAM Read Command */
-cmd_read_nvram:
+/* EEPROM Read Command */
+cmd_read_eeprom:
     rcall comm_rx_byte
     cpi	temp, 0x20
-    brmi cmd_nvram_exit
+    brmi cmd_eeprom_exit
     cpi	temp, 0x40
-    brcc cmd_nvram_exit
+    brcc cmd_eeprom_exit
     rcall comm_delay
     cbi	_SFR_IO_ADDR(PORTB), 4
     out	0x22, zero
@@ -433,7 +402,7 @@ cmd_read_nvram:
     rcall comm_tx_start
     rjmp comm_tx_byte_exit_in_step1
 
-/* 0x1CE: Serial Number Update */
+/* Serial Number Update */
 cmd_update_sn:
     rcall comm_rx_byte
     mov	s0, temp
