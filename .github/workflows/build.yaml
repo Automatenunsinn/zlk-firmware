@@ -25,8 +25,8 @@ jobs:
 
       - name: Convert to bin
         run: |
-          objcopy -O binary ".pio/build/v2/firmware.elf" firmware_v2.bin
-          objcopy -O binary ".pio/build/v3/firmware.elf" firmware_v3.bin
+          $HOME/.platformio/packages/toolchain-atmelavr/bin/avr-objcopy -O binary ".pio/build/v2/firmware.elf" firmware_v2.bin
+          $HOME/.platformio/packages/toolchain-atmelavr/bin/avr-objcopy -O binary ".pio/build/v3/firmware.elf" firmware_v3.bin
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
