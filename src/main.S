@@ -489,25 +489,19 @@ cmd_update_sn:
     cp	bsn0, sn0
 #ifndef __AVR_AT90S1200__
     brcs update_sn_backup
-#else
-    brmi update_sn_backup
-#endif
     cp	bsn1, sn1
-#ifndef __AVR_AT90S1200__
     brcs update_sn_backup
-#else
-    brmi update_sn_backup
-#endif
     cp	bsn2, sn2
-#ifndef __AVR_AT90S1200__
+    brcs update_sn_backup
+    cp	bsn3, sn3
     brcs update_sn_backup
 #else
     brmi update_sn_backup
-#endif
-    cp	bsn3, sn3
-#ifndef __AVR_AT90S1200__
-    brcs update_sn_backup
-#else
+    cp	bsn1, sn1
+    brmi update_sn_backup
+    cp	bsn2, sn2
+    brmi update_sn_backup
+    cp	temp, sn3
     brmi update_sn_backup
 #endif
     rjmp auth1_init_state
@@ -738,9 +732,16 @@ auth2_rotate_done:
     wdr
     rcall comm_tx_start
     rcall comm_tx_state
+#ifndef __AVR_AT90S1200__
     cbi	_SFR_IO_ADDR(PORTB), TXPIN
     rcall comm_delay
     rjmp idle_wait
+#else
+    rjmp comm_tx_byte_exit_in_step1
+#endif
+#ifdef __AVR_AT90S1200__
+    rcall comm_delay
+#endif
 
 /* Authenticated Write Command */
 cmd_auth_write:
