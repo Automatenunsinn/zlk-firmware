@@ -96,8 +96,8 @@ eeprom_read_next:
     inc	temp
 #ifndef __AVR_AT90S1200__
 eeprom_read_at_temp:
-    out	0x22, zero
-    out	0x21, temp
+    out	_SFR_IO_ADDR(EEARH), zero
+    out	_SFR_IO_ADDR(EEARL), temp
     sbi	_SFR_IO_ADDR(EECR), 0
 #else
     out	_SFR_IO_ADDR(EEAR), temp
@@ -110,8 +110,8 @@ eeprom_write_wait_and_inc:
     inc	temp
 #ifndef __AVR_AT90S1200__
 eeprom_write_at_temp:
-    out	0x22, zero
-    out	0x21, temp
+    out	_SFR_IO_ADDR(EEARH), zero
+    out	_SFR_IO_ADDR(EEARL), temp
     sbi	_SFR_IO_ADDR(EECR), 2 /* EEPE */
     sbi	_SFR_IO_ADDR(EECR), 1 /* EEMPE */
 #else
@@ -314,8 +314,8 @@ reset:
     ldi	temp, 0x03
     sts	0x61, temp /* CLKPR set */
     eor	zero, zero
-    out	0x22, zero /* EEARH */
-    out	0x21, zero /* EEARL */
+    out	_SFR_IO_ADDR(EEARH), zero
+    out	_SFR_IO_ADDR(EEARL), zero
     ldi	temp, 0xFF
     out	_SFR_IO_ADDR(DDRD), temp
     out	_SFR_IO_ADDR(DDRC), temp
@@ -404,8 +404,8 @@ cmd_write_eeprom:
     cpi	temp, 0x40
     brcc cmd_eeprom_exit
 #ifndef __AVR_AT90S1200__
-    out	0x22, zero
-    out	0x21, temp
+    out	_SFR_IO_ADDR(EEARH), zero
+    out	_SFR_IO_ADDR(EEARL), temp
 #else
     out	_SFR_IO_ADDR(EEAR), temp
 #endif
@@ -432,8 +432,8 @@ cmd_read_eeprom:
     rcall comm_delay
     cbi	_SFR_IO_ADDR(PORTB), TXPIN
 #ifndef __AVR_AT90S1200__
-    out	0x22, zero
-    out	0x21, temp
+    out	_SFR_IO_ADDR(EEARH), zero
+    out	_SFR_IO_ADDR(EEARL), temp
 #else
     out	_SFR_IO_ADDR(EEAR), temp
 #endif
@@ -687,8 +687,8 @@ cmd_auth_step_2:
     rcall comm_delay
     cbi	_SFR_IO_ADDR(PORTB), TXPIN
 #ifndef __AVR_AT90S1200__
-    out	0x22, zero
-    out	0x21, temp
+    out	_SFR_IO_ADDR(EEARH), zero
+    out	_SFR_IO_ADDR(EEARL), temp
 #else
     out	_SFR_IO_ADDR(EEAR), temp
 #endif
@@ -869,8 +869,8 @@ entropy_rotate_done:
 #ifndef __AVR_AT90S1200__
     cpi	s4, 0x40
     brcc cmd_auth_write_done
-    out	0x22, zero
-    out	0x21, s4
+    out	_SFR_IO_ADDR(EEARH), zero
+    out	_SFR_IO_ADDR(EEARL), s4
     sbi	_SFR_IO_ADDR(EECR), 2
     sbi	_SFR_IO_ADDR(EECR), 1
 #else
