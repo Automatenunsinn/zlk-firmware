@@ -33,6 +33,9 @@
 #define s9 r30
 #define s10 r31
 
+#define RXPIN 3
+#define TXPIN 4
+
 #ifdef NEW_KEY
 #define KEY_1_01 0x61
 #define KEY_1_02 0x4F
@@ -102,9 +105,9 @@ main:
 
 /* Bit-banged Handshake Protocol: Start Transmission */
 comm_tx_start:
-    sbi	_SFR_IO_ADDR(PORTB), 4
+    sbi	_SFR_IO_ADDR(PORTB), TXPIN
 comm_tx_start_wait:
-    sbis	_SFR_IO_ADDR(PINB), 3
+    sbis	_SFR_IO_ADDR(PINB), RXPIN
     rjmp comm_tx_start_wait
     ori	flags, 0x20
     ret
@@ -195,14 +198,14 @@ rx_bit_loop:
     wdr
     rcall comm_delay
     add	temp, temp
-    sbic	_SFR_IO_ADDR(PINB), 3
+    sbic	_SFR_IO_ADDR(PINB), RXPIN
     ori	temp, 0x01
-    sbis	_SFR_IO_ADDR(PINB), 4
+    sbis	_SFR_IO_ADDR(PINB), TXPIN
     rjmp rx_bit_low
-    cbi	_SFR_IO_ADDR(PORTB), 4
+    cbi	_SFR_IO_ADDR(PORTB), TXPIN
     rjmp rx_bit_done
 rx_bit_low:
-    sbi	_SFR_IO_ADDR(PORTB), 4
+    sbi	_SFR_IO_ADDR(PORTB), TXPIN
 rx_bit_done:
     dec	cnt
     brne rx_bit_loop
@@ -215,10 +218,10 @@ tx_bit_loop:
     wdr
     add	temp, temp
     brcc tx_bit_low
-    sbi	_SFR_IO_ADDR(PORTB), 4
+    sbi	_SFR_IO_ADDR(PORTB), TXPIN
     rjmp tx_bit_done
 tx_bit_low:
-    cbi	_SFR_IO_ADDR(PORTB), 4
+    cbi	_SFR_IO_ADDR(PORTB), TXPIN
 tx_bit_done:
     rcall comm_wait_ack
     dec	cnt
@@ -230,12 +233,12 @@ comm_wait_ack:
     sbrc	flags, 5
     rjmp wait_for_pb_low
 wait_for_pb_high:
-    sbis	_SFR_IO_ADDR(PINB), 3
+    sbis	_SFR_IO_ADDR(PINB), RXPIN
     rjmp wait_for_pb_high
     ori	flags, 0x20
     rjmp wait_for_pb_done
 wait_for_pb_low:
-    sbic	_SFR_IO_ADDR(PINB), 3
+    sbic	_SFR_IO_ADDR(PINB), RXPIN
     rjmp wait_for_pb_low
     andi	flags, 0xDF
 wait_for_pb_done:
@@ -341,9 +344,9 @@ entropy_loop:
     adc	ent1, temp
     sub	ent2, arg1
     adc	ent3, temp
-    sbis	_SFR_IO_ADDR(PINB), 3
+    sbis	_SFR_IO_ADDR(PINB), RXPIN
     rjmp entropy_loop
-    sbi	_SFR_IO_ADDR(PORTB), 4
+    sbi	_SFR_IO_ADDR(PORTB), TXPIN
     rcall comm_rx_byte
     cpi	temp, 0x31
     breq jump_auth1
@@ -357,7 +360,7 @@ entropy_loop:
     breq cmd_write_eeprom
     cpi	temp, 0x36
     breq cmd_read_eeprom
-    cbi	_SFR_IO_ADDR(PORTB), 4
+    cbi	_SFR_IO_ADDR(PORTB), TXPIN
     rjmp idle_wait
 
 jump_auth1:
@@ -382,7 +385,7 @@ cmd_write_eeprom:
     sbi	_SFR_IO_ADDR(EECR), 1 /* EEMPE */
 cmd_eeprom_exit:
     rcall comm_delay
-    cbi	_SFR_IO_ADDR(PORTB), 4
+    cbi	_SFR_IO_ADDR(PORTB), TXPIN
     rjmp idle_wait
 
 /* EEPROM Read Command */
@@ -393,7 +396,7 @@ cmd_read_eeprom:
     cpi	temp, 0x40
     brcc cmd_eeprom_exit
     rcall comm_delay
-    cbi	_SFR_IO_ADDR(PORTB), 4
+    cbi	_SFR_IO_ADDR(PORTB), TXPIN
     out	0x22, zero
     out	0x21, temp
     sbi	_SFR_IO_ADDR(EECR), 0
@@ -413,7 +416,7 @@ cmd_update_sn:
     rcall comm_rx_byte
     mov	s3, temp
     rcall comm_delay
-    cbi	_SFR_IO_ADDR(PORTB), 4
+    cbi	_SFR_IO_ADDR(PORTB), TXPIN
     ldi	temp, 0x4B
     rcall eeprom_read_at_temp
     in	temp, _SFR_IO_ADDR(EEDR)
@@ -479,7 +482,7 @@ auth1_init_state:
 cmd_auth_step_1:
     rcall comm_rx_state
     rcall comm_delay
-    cbi	_SFR_IO_ADDR(PORTB), 4
+    cbi	_SFR_IO_ADDR(PORTB), TXPIN
     ldi	temp, 0x3F
     rcall eeprom_read_next
     in	s4, _SFR_IO_ADDR(EEDR)
@@ -592,7 +595,7 @@ auth1_rotate_done:
     mov	temp, s10
 comm_tx_byte_exit_in_step1:
     rcall comm_tx_byte
-    cbi	_SFR_IO_ADDR(PORTB), 4
+    cbi	_SFR_IO_ADDR(PORTB), TXPIN
     rcall comm_delay
     rjmp idle_wait
 
@@ -601,7 +604,7 @@ cmd_auth_step_2:
     rcall comm_rx_state
     rcall comm_rx_byte
     rcall comm_delay
-    cbi	_SFR_IO_ADDR(PORTB), 4
+    cbi	_SFR_IO_ADDR(PORTB), TXPIN
     out	0x22, zero
     out	0x21, temp
     sbi	_SFR_IO_ADDR(EECR), 0
@@ -640,14 +643,14 @@ auth2_rotate_done:
     wdr
     rcall comm_tx_start
     rcall comm_tx_state
-    cbi	_SFR_IO_ADDR(PORTB), 4
+    cbi	_SFR_IO_ADDR(PORTB), TXPIN
     rcall comm_delay
     rjmp idle_wait
 
 /* Authenticated Write Command */
 cmd_auth_write:
     rcall comm_delay
-    cbi	_SFR_IO_ADDR(PORTB), 4
+    cbi	_SFR_IO_ADDR(PORTB), TXPIN
     rcall comm_delay
     wdr
     rcall comm_tx_start
@@ -660,11 +663,11 @@ cmd_auth_write:
     mov	temp, ent3
     rcall comm_tx_byte
     wdr
-    cbi	_SFR_IO_ADDR(PORTB), 4
+    cbi	_SFR_IO_ADDR(PORTB), TXPIN
     rcall comm_delay
     ldi	cnt, 0x32
 entropy_wait_loop:
-    sbic	_SFR_IO_ADDR(PINB), 3
+    sbic	_SFR_IO_ADDR(PINB), RXPIN
     rjmp entropy_received
     wdr
     rcall comm_delay
@@ -672,14 +675,14 @@ entropy_wait_loop:
     brne entropy_wait_loop
     rjmp idle_wait
 entropy_received:
-    sbi	_SFR_IO_ADDR(PORTB), 4
+    sbi	_SFR_IO_ADDR(PORTB), TXPIN
     rcall comm_rx_state
     rcall comm_rx_byte
     mov	s4, temp
     rcall comm_rx_byte
     mov	s5, temp
     rcall comm_delay
-    cbi	_SFR_IO_ADDR(PORTB), 4
+    cbi	_SFR_IO_ADDR(PORTB), TXPIN
     ldi	temp, 0x80
     sts	0x61, temp
     ldi	temp, 0x00
