@@ -1,4 +1,5 @@
 #include <avr/io.h>
+#include "keys.h"
 
 /* Register Definitions */
 #define ent0 r0
@@ -33,8 +34,46 @@
 #define s9 r30
 #define s10 r31
 
-#define RXPIN 3
-#define TXPIN 4
+/* Hardware Configuration */
+#ifdef __AVR_AT90S1200__
+  #define RXPIN 5
+  #define TXPIN 6
+  #define OLD_KEY
+#else
+  #define RXPIN 3
+  #define TXPIN 4
+#endif
+
+/* Serial Number Configuration (Old Version Only) */
+#ifndef CASE_ID_01
+#define CASE_ID_01 0x12
+#endif
+#ifndef CASE_ID_23
+#define CASE_ID_23 0x34
+#endif
+
+#ifndef ZL_NUM_0
+#define ZL_NUM_0 0x09
+#endif
+#ifndef ZL_NUM_12
+#define ZL_NUM_12 0x99
+#endif
+#ifndef ZL_NUM_34
+#define ZL_NUM_34 0x99
+#endif
+#ifndef ZL_NUM_56
+#define ZL_NUM_56 0x99
+#endif
+#ifndef ZL_NUM_78
+#define ZL_NUM_78 0x99
+#endif
+
+#ifndef DATE_0
+#define DATE_0 0x01
+#endif
+#ifndef DATE_1
+#define DATE_1 0x98
+#endif
 
 .section .text
 
@@ -55,20 +94,30 @@ comm_tx_start_wait:
 /* EEPROM Access Helpers */
 eeprom_read_next:
     inc	temp
+#ifndef __AVR_AT90S1200__
 eeprom_read_at_temp:
     out	0x22, zero
     out	0x21, temp
     sbi	_SFR_IO_ADDR(EECR), 0
+#else
+    out	_SFR_IO_ADDR(EEAR), temp
+    sbi	_SFR_IO_ADDR(EECR), 0
+#endif
     ret
 
 /* EEPROM Write and Increment */
 eeprom_write_wait_and_inc:
     inc	temp
+#ifndef __AVR_AT90S1200__
 eeprom_write_at_temp:
     out	0x22, zero
     out	0x21, temp
     sbi	_SFR_IO_ADDR(EECR), 2 /* EEPE */
     sbi	_SFR_IO_ADDR(EECR), 1 /* EEMPE */
+#else
+    out	_SFR_IO_ADDR(EEAR), temp
+    sbi	_SFR_IO_ADDR(EECR), 1
+#endif
 eeprom_wait_loop:
     sbic	_SFR_IO_ADDR(EECR), 1
     rjmp eeprom_wait_loop
@@ -77,9 +126,15 @@ eeprom_wait_loop:
 /* Timing Delay */
 comm_delay:
     eor	arg1, arg1
+#ifndef __AVR_AT90S1200__
     ldi	res, 0x02
+#else
+    ldi	res, 0x04
+#endif
 delay_inner_loop:
+#ifndef __AVR_AT90S1200__
     nop
+#endif
     dec	arg1
     brne delay_inner_loop
     dec	res
@@ -248,6 +303,8 @@ comm_tx_state:
 
 /* System Reset and Initialization */
 reset:
+#ifndef __AVR_AT90S1200__
+    /* Stack & Clock Setup for New Hardware */
     ldi	temp, 0xFF
     out	_SFR_IO_ADDR(SPL), temp
     ldi	temp, 0x02
@@ -273,6 +330,35 @@ reset:
     sts	0x60, temp
     ldi	temp, 0x08
     sts	0x60, temp
+#else
+    /* EEPROM Wipe Logic for Old Hardware */
+    ldi	temp, 0x00
+    mov	zero, temp
+    ldi	temp, 0x0C
+    out	_SFR_IO_ADDR(EEAR), temp
+    sbi	_SFR_IO_ADDR(EECR), 0
+    in	temp, _SFR_IO_ADDR(EEDR)
+    cpi	temp, 0x00
+    breq reset_done
+    ldi	temp, 0x00
+    out	_SFR_IO_ADDR(EEDR), temp
+    ldi	temp, 0xFF
+    ldi	arg1, 0x40
+reset_eeprom_loop:
+    rcall eeprom_write_wait_and_inc
+    dec	arg1
+    brne reset_eeprom_loop
+reset_done:
+    ldi	temp, 0xFF
+    out	_SFR_IO_ADDR(DDRD), temp
+    eor	temp, temp
+    out	_SFR_IO_ADDR(PORTD), temp
+    out	_SFR_IO_ADDR(PORTB), temp
+    ldi	temp, 0xDF
+    out	_SFR_IO_ADDR(DDRB), temp
+    ldi	temp, 0x08
+    out	_SFR_IO_ADDR(WDTCR), temp
+#endif
 
 /* Main Idle Loop */
 idle_wait:
@@ -317,12 +403,20 @@ cmd_write_eeprom:
     brmi cmd_eeprom_exit
     cpi	temp, 0x40
     brcc cmd_eeprom_exit
+#ifndef __AVR_AT90S1200__
     out	0x22, zero
     out	0x21, temp
+#else
+    out	_SFR_IO_ADDR(EEAR), temp
+#endif
     rcall comm_rx_byte
     out	_SFR_IO_ADDR(EEDR), temp
+#ifndef __AVR_AT90S1200__
     sbi	_SFR_IO_ADDR(EECR), 2 /* EEPE */
     sbi	_SFR_IO_ADDR(EECR), 1 /* EEMPE */
+#else
+    sbi	_SFR_IO_ADDR(EECR), 1
+#endif
 cmd_eeprom_exit:
     rcall comm_delay
     cbi	_SFR_IO_ADDR(PORTB), TXPIN
@@ -337,8 +431,12 @@ cmd_read_eeprom:
     brcc cmd_eeprom_exit
     rcall comm_delay
     cbi	_SFR_IO_ADDR(PORTB), TXPIN
+#ifndef __AVR_AT90S1200__
     out	0x22, zero
     out	0x21, temp
+#else
+    out	_SFR_IO_ADDR(EEAR), temp
+#endif
     sbi	_SFR_IO_ADDR(EECR), 0
     in	temp, _SFR_IO_ADDR(EEDR)
     rcall comm_delay
@@ -357,11 +455,19 @@ cmd_update_sn:
     mov	s3, temp
     rcall comm_delay
     cbi	_SFR_IO_ADDR(PORTB), TXPIN
+
+#ifndef __AVR_AT90S1200__
     ldi	temp, 0x4B
     rcall eeprom_read_at_temp
     in	temp, _SFR_IO_ADDR(EEDR)
     cpi	temp, 0x00
     brne auth1_init_state
+#else
+    mov	temp, zero
+    cpi	temp, 0x00
+    brne auth1_init_state
+#endif
+
     ldi	temp, 0x02
     rcall eeprom_read_next
     in	sn0, _SFR_IO_ADDR(EEDR)
@@ -381,13 +487,29 @@ cmd_update_sn:
     rcall eeprom_read_next
     in	bsn3, _SFR_IO_ADDR(EEDR)
     cp	bsn0, sn0
+#ifndef __AVR_AT90S1200__
     brcs update_sn_backup
+#else
+    brmi update_sn_backup
+#endif
     cp	bsn1, sn1
+#ifndef __AVR_AT90S1200__
     brcs update_sn_backup
+#else
+    brmi update_sn_backup
+#endif
     cp	bsn2, sn2
+#ifndef __AVR_AT90S1200__
     brcs update_sn_backup
+#else
+    brmi update_sn_backup
+#endif
     cp	bsn3, sn3
+#ifndef __AVR_AT90S1200__
     brcs update_sn_backup
+#else
+    brmi update_sn_backup
+#endif
     rjmp auth1_init_state
 update_sn_backup:
     ldi	temp, 0x07
@@ -402,6 +524,7 @@ update_sn_backup:
 
 /* Authentication Step 1 */
 auth1_init_state:
+#ifndef __AVR_AT90S1200__
     ldi	temp, 0x46
     rcall eeprom_read_next
     in	s4, _SFR_IO_ADDR(EEDR)
@@ -417,12 +540,23 @@ auth1_init_state:
     in	s9, _SFR_IO_ADDR(EEDR)
     rcall eeprom_read_next
     in	s10, _SFR_IO_ADDR(EEDR)
+#else
+    ldi	s4, CASE_ID_01
+    ldi	s5, CASE_ID_23
+    ldi	s6, 0x00
+    ldi	s7, 0x00
+    mov	s8, zero
+    ldi	s9, 0x00
+    ldi	s10, 0x00
+#endif
     rjmp auth1_start
 
 cmd_auth_step_1:
     rcall comm_rx_state
     rcall comm_delay
     cbi	_SFR_IO_ADDR(PORTB), TXPIN
+
+#ifndef __AVR_AT90S1200__
     ldi	temp, 0x3F
     rcall eeprom_read_next
     in	s4, _SFR_IO_ADDR(EEDR)
@@ -438,12 +572,23 @@ cmd_auth_step_1:
     in	s9, _SFR_IO_ADDR(EEDR)
     rcall eeprom_read_next
     in	s10, _SFR_IO_ADDR(EEDR)
+#else
+    ldi	s4, ZL_NUM_0
+    ldi	s5, ZL_NUM_12
+    ldi	s6, ZL_NUM_34
+    ldi	s7, ZL_NUM_56
+    ldi	s8, ZL_NUM_78
+    ldi	s9, DATE_0
+    ldi	s10, DATE_1
+#endif
 
 auth1_start:
+#ifndef __AVR_AT90S1200__
     ldi	temp, 0x80
     sts	0x61, temp
     ldi	temp, 0x00
     sts	0x61, temp
+#endif
     rcall crypto_apply_key_1
     ldi	temp, AUTH_1_01
     eor	s5, temp
@@ -515,10 +660,12 @@ auth1_rotate_done:
     eor	s9, temp
     ldi	temp, AUTH_ROT_1_06
     eor	s10, temp
+#ifndef __AVR_AT90S1200__
     ldi	temp, 0x80
     sts	0x61, temp
     ldi	temp, 0x03
     sts	0x61, temp
+#endif
     wdr
     rcall comm_tx_start
     rcall comm_tx_state
@@ -545,14 +692,20 @@ cmd_auth_step_2:
     rcall comm_rx_byte
     rcall comm_delay
     cbi	_SFR_IO_ADDR(PORTB), TXPIN
+#ifndef __AVR_AT90S1200__
     out	0x22, zero
     out	0x21, temp
+#else
+    out	_SFR_IO_ADDR(EEAR), temp
+#endif
     sbi	_SFR_IO_ADDR(EECR), 0
     in	s4, _SFR_IO_ADDR(EEDR)
+#ifndef __AVR_AT90S1200__
     ldi	temp, 0x80
     sts	0x61, temp
     ldi	temp, 0x00
     sts	0x61, temp
+#endif
     rcall crypto_apply_key_1
     ldi	temp, 0x32
     mov	loop_ext, temp
@@ -576,10 +729,12 @@ auth2_rotate_done:
     dec	loop_ext
     brne auth2_outer_loop
     rcall crypto_apply_key_2
+#ifndef __AVR_AT90S1200__
     ldi	temp, 0x80
     sts	0x61, temp
     ldi	temp, 0x03
     sts	0x61, temp
+#endif
     wdr
     rcall comm_tx_start
     rcall comm_tx_state
@@ -623,10 +778,12 @@ entropy_received:
     mov	s5, temp
     rcall comm_delay
     cbi	_SFR_IO_ADDR(PORTB), TXPIN
+#ifndef __AVR_AT90S1200__
     ldi	temp, 0x80
     sts	0x61, temp
     ldi	temp, 0x00
     sts	0x61, temp
+#endif
     ldi	temp, KEY_2_01
     eor	s0, temp
     ldi	temp, KEY_2_02
@@ -692,10 +849,12 @@ entropy_rotate_done:
     ldi	temp, AUTH_1_01
     eor	s5, temp
     ldi	temp, AUTH_1_02
+#ifndef __AVR_AT90S1200__
     ldi	temp, 0x80
     sts	0x61, temp
     ldi	temp, 0x03
     sts	0x61, temp
+#endif
     wdr
     cp	ent0, s0
     brne cmd_auth_write_done
@@ -706,12 +865,17 @@ entropy_rotate_done:
     cp	ent3, s3
     brne cmd_auth_write_done
     out	_SFR_IO_ADDR(EEDR), s5
+#ifndef __AVR_AT90S1200__
     cpi	s4, 0x40
     brcc cmd_auth_write_done
     out	0x22, zero
     out	0x21, s4
     sbi	_SFR_IO_ADDR(EECR), 2
     sbi	_SFR_IO_ADDR(EECR), 1
+#else
+    out	_SFR_IO_ADDR(EEAR), s4
+    sbi	_SFR_IO_ADDR(EECR), 1
+#endif
 eeprom_write_final_wait:
     sbic	_SFR_IO_ADDR(EECR), 1
     rjmp eeprom_write_final_wait
